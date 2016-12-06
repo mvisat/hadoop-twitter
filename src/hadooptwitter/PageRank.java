@@ -13,6 +13,7 @@ import mapreduce.TopN;
 import mapreduce.Preprocess;
 import mapreduce.Iteration;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
@@ -20,18 +21,21 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.util.Tool;
+import org.apache.hadoop.util.ToolRunner;
 
 /**
  *
  * @author visat
  */
-public class HadoopTwitter {
+public class PageRank extends Configured implements Tool {
     private final int N_ITERATION = 3;
     private final int N_REDUCE = 16;
 
     private final String ME = "visat";
     private final String PREFIX = String.format("[%s] ", ME);
-    private final Configuration CONFIG = new Configuration();
+
+    private Configuration CONFIG;
 
     private String getRootDir() {
         return Path.SEPARATOR;
@@ -57,7 +61,7 @@ public class HadoopTwitter {
 
     private void doPreprocess(String in) throws IOException, InterruptedException, ClassNotFoundException {
         Job job = Job.getInstance(CONFIG, PREFIX.concat("preprocess"));
-        job.setJarByClass(HadoopTwitter.class);
+        job.setJarByClass(PageRank.class);
         job.setMapperClass(Preprocess.CMapper.class);
         job.setReducerClass(Preprocess.CReducer.class);
         job.setOutputKeyClass(LongWritable.class);
@@ -77,7 +81,7 @@ public class HadoopTwitter {
 
     private void doIterate(int iteration) throws IOException, InterruptedException, ClassNotFoundException {
         Job job = Job.getInstance(CONFIG, PREFIX.concat(String.format("iteration-%d", iteration)));
-        job.setJarByClass(HadoopTwitter.class);
+        job.setJarByClass(PageRank.class);
         job.setMapperClass(Iteration.CMapper.class);
         job.setReducerClass(Iteration.CReducer.class);
         job.setOutputKeyClass(LongWritable.class);
@@ -102,7 +106,7 @@ public class HadoopTwitter {
 
     private void doTopN() throws IOException, InterruptedException, ClassNotFoundException {
         Job job = Job.getInstance(CONFIG, PREFIX.concat("top-n"));
-        job.setJarByClass(HadoopTwitter.class);
+        job.setJarByClass(PageRank.class);
         job.setMapperClass(TopN.CMapper.class);
         job.setMapOutputKeyClass(DoubleWritable.class);
         job.setMapOutputValueClass(LongWritable.class);
@@ -125,27 +129,33 @@ public class HadoopTwitter {
         job.waitForCompletion(true);
     }
 
-    public void rankPage(String input) {
+    @Override
+    public int run(String[] args) throws Exception {
+        if (args.length != 1) {
+            System.out.println("Usage: HadoopTwitter <input-dir>");
+            ToolRunner.printGenericCommandUsage(System.out);
+            return 1;
+        }
+
+        CONFIG = getConf();
         try {
             doClean();
-            doPreprocess(input);
+            doPreprocess(args[0]);
             for (int i = 1; i <= N_ITERATION; ++i) doIterate(i);
             doTopN();
+            return 0;
         } catch (IOException | InterruptedException | ClassNotFoundException e) {
-            Logger.getLogger(HadoopTwitter.class.getName()).log(Level.SEVERE, null, e);
+            Logger.getLogger(PageRank.class.getName()).log(Level.SEVERE, null, e);
         }
+        return 1;
     }
 
     /**
      * @param args the command line arguments
+     * @throws java.lang.Exception
      */
-    public static void main(String[] args) {
-        if (args.length == 1) {
-            new HadoopTwitter().rankPage(args[0]);
-        }
-        else {
-            System.out.println("Error: Invalid argument");
-            System.out.println("hadoop jar HadoopTwitter.jar <input_file>");
-        }
+    public static void main(String[] args) throws Exception {
+        int result = ToolRunner.run(new Configuration(), new PageRank(), args);
+        System.exit(result);
     }
 }
