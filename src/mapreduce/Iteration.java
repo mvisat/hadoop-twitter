@@ -51,8 +51,10 @@ public class Iteration {
             double sum = 0.0;
             StringBuilder sb = new StringBuilder();
             for (UserWritable user: values) {
-                sum += user.getPageRank();
-                sb.append(user.getFollowings());
+                if (user.getFollowings().toString().isEmpty())
+                    sum += user.getPageRank();
+                else
+                    sb.append(user.getFollowings());
             }
             double pageRank = (1.0-D) + D * sum;
             UserWritable user = new UserWritable(pageRank, sb.toString());
